@@ -1,0 +1,188 @@
+author: kei-g
+branding:
+  color: blue
+  icon: log-in
+description: >
+  This action imports a GPG secret key and also corresponding public key if specified.
+inputs:
+  fingerprint:
+    description: >
+      The fingerprint of the GPG secret key.
+    required: true
+  passphrase:
+    description: >
+      The passphrase to decrypt the GPG secret key.
+    required: true
+  public-key:
+    description: >
+      The GPG public key corresponding to the `secret-key`.
+    required: false
+  secret-key:
+    description: >
+      The GPG secret key to sign.
+    required: true
+outputs:
+  created-at:
+    description: >
+      Timestamp when the imported GPG key was created.
+      It will be formatted to 'YYYY/MM/dd HH:mm:ss ZZZ' style.
+    value: ${{ steps.main.outputs.created-at }}
+  email:
+    description: >
+      E-mail address of the imported GPG key.
+    value: ${{ steps.main.outputs.email }}
+  fingerprint:
+    description: >
+      Fingerprint of the imported GPG key.
+    value: ${{ steps.main.outputs.fingerprint }}
+  id:
+    description: >
+      ID of the imported GPG key.
+    value: ${{ steps.main.outputs.id }}
+  keygrip:
+    description: >
+      Keygrip of the imported GPG key.
+    value: ${{ steps.main.outputs.keygrip }}
+  primary-id:
+    description: >
+      ID of primary key corresponds to the imported GPG key if it was a subkey.
+    value: ${{ steps.main.outputs.primary-id }}
+  primary-timestamp:
+    description: >
+      Timestamp when the primary GPG key was created.
+      This value is elapsed seconds from 1970/01/01 00:00:00 UTC.
+    value: ${{ steps.main.outputs.primary-timestamp }}
+  user:
+    description: >
+      User name of the imported GPG key.
+    value: ${{ steps.main.outputs.user }}
+name: 'Import a GPG key'
+runs:
+  steps:
+    - env:
+        fingerprint: ${{ inputs.fingerprint }}
+        passphrase: ${{ inputs.passphrase }}
+        public-key: ${{ inputs.public-key }}
+        secret-key: ${{ inputs.secret-key }}
+      id: main
+      name: Import GPG keys
+      run: |
+        gpgConnectAgent() {
+          {
+            echo "$1"
+            echo "/bye"
+          } | gpg-connect-agent
+        }
+
+        # Get inputs
+        echo ::group::Get inputs
+        declare -A env
+        while read -d $'\0' -r e; do
+          name=${e%%=*}
+          case "$name" in
+            fingerprint|passphrase|public-key|secret-key) env[$name]=${e#*=};;
+          esac
+        done < <(env -0)
+        [[ -z ${env[fingerprint]} ]] && { echo No fingerprint is passed >&2; exit 1; }
+        [[ -z ${env[passphrase]} ]] && { echo No passphrase is passed >&2; exit 1; }
+        [[ -z ${env[secret-key]} ]] && { echo No secret key is passed >&2; exit 1; }
+        echo OK
+        echo ::endgroup::
+
+        # Import the GPG public key
+        [[ -n "${env[public-key]}" ]] && {
+          echo ::group::Import the GPG public key
+          gpg --batch --import --yes <<< ${env[public-key]}
+          echo ::endgroup::
+        }
+
+        # Import the GPG secret key
+        echo ::group::Import the GPG secret key
+        gpg --batch --import --yes <<< ${env[secret-key]}
+        echo ::endgroup::
+
+        # Configure GPG Agent
+        echo ::group::Configure GPG Agent
+        {
+          echo allow-preset-passphrase
+          echo default-cache-ttl 21600
+          echo max-cache-ttl 31536000
+        } > ${GNUPGHOME:-$HOME/.gnupg}/gpg-agent.conf
+        gpgConnectAgent reloadagent
+        echo ::endgroup::
+
+        # Parse the imported key
+        echo ::group::Parse the imported key
+        declare -A key
+        ifs=$IFS
+        IFS=:
+        while read -a cols -r; do
+          case ${cols[0]} in
+            fpr)
+                [[ ${cols[9]} =~ ${env[fingerprint]} ]] \
+                  && key[fingerprint]=${cols[9]}
+                echo "[fingerprint] ${cols[9]}"
+              ;;
+            grp)
+                [[ -n ${key[fingerprint]} ]] \
+                  && key[keygrip]=${cols[9]}
+                echo "[keygrip] ${cols[9]}"
+              ;;
+            sec)
+                [[ -n ${key[fingerprint]} ]] \
+                  || {
+                    key[id]=${cols[4]}
+                    key[created-at]=${cols[5]}
+                    unset key[keygrip]
+                    unset key[primary-id]
+                    unset key[primary-timestamp]
+                  }
+                echo "[key] ${cols[4]}"
+              ;;
+            ssb)
+                [[ -n ${key[fingerprint]} ]] \
+                  || {
+                    key[primary-id]=${key[id]}
+                    key[id]=${cols[4]}
+                    key[primary-timestamp]=${key[created-at]}
+                    key[created-at]=${cols[5]}
+                  }
+                echo "[subkey] ${cols[4]}"
+              ;;
+            uid)
+                user=${cols[9]}
+                key[user]=${user%\ *}
+                key[email]=${user##*\ }
+                [[ ${key[email]} =~ \<([^\>]+)\> ]] \
+                  && key[email]=${BASH_REMATCH[1]}
+                echo "[user]"
+                echo "  [name] ${key[user]}"
+                echo "  [email] ${key[email]}"
+              ;;
+          esac
+        done < <(gpg --batch --list-secret-keys --with-colons --with-keygrip)
+        IFS=$ifs
+        echo ::endgroup::
+
+        # Preset passphrase for the relevant keygrip
+        echo ::group::Preset passphrase
+        passphrase=$(
+          printf '%s' "${env[passphrase]}" \
+            | hexdump -e '1/1 "%.2x"' -v
+        )
+        gpgConnectAgent "preset_passphrase ${key[keygrip]} -1 $passphrase"
+        echo ::endgroup::
+
+        # Configure git
+        git config --global user.email "${key[email]}"
+        git config --global user.name "${key[user]}"
+
+        # Output
+        key[create-at]=$(date -d @${key[created-at]} "+%Y/%m/%d %H:%M:%S %Z")
+        echo ::group::Outputs
+        for prop in "${!key[@]}"; do
+          echo "$prop=${key[$prop]}"
+        done | tee -a $GITHUB_OUTPUT
+        echo ::endgroup::
+      shell: bash
+  using: composite

@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "alwaysStrict": true,
+    "charset": "utf8",
+    "declaration": true,
+    "declarationDir": ".",
+    "downlevelIteration": true,
+    "emitBOM": false,
+    "emitDeclarationOnly": true,
+    "lib": [
+      "ES2022",
+    ],
+    "module": "Node16",
+    "moduleResolution": "node16",
+    "newLine": "lf",
+    "pretty": true,
+    "removeComments": false,
+    "strict": true,
+    "target": "ES2022",
+  },
+  "exclude": [],
+  "include": [
+    "src/**/*.ts",
+  ],
+}

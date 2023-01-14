@@ -1,0 +1,65 @@
+author: kei-g
+branding:
+  color: blue
+  icon: upload-cloud
+description: >
+  This action gets the github-action[bot] to commit changes in a single file,
+  to sign it, and to push it to GitHub.
+inputs:
+  file:
+    description: >
+      Target file path from the repository root.
+    required: true
+  github-token:
+    description: >
+      $GITHUB_TOKEN must be passed.
+    required: true
+  message:
+    description: >
+      Commit message.
+    required: true
+  target-branch:
+    description: >
+      Target branch name.
+    required: true
+name: Put changes with the github-actions[bot] signature
+runs:
+  steps:
+    - env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        file: ${{ inputs.file }}
+        message: ${{ inputs.message }}
+        target-branch: ${{ inputs.target-branch }}
+      name: Put changes
+      run: |
+        # Get inputs
+        echo ::group::Get inputs
+        declare -A env
+        while read -d $'\0' -r e; do
+          name=${e%%=*}
+          case "$name" in
+            file|message|target-branch) env[$name]=${e#*=};;
+          esac
+        done < <(env -0)
+        [[ -z ${env[file]} ]] && { echo No file is passed >&2; exit 1; }
+        [[ -z ${env[message]} ]] && { echo No message is passed >&2; exit 1; }
+        [[ -z ${env[target-branch]} ]] && { echo No target-branch is passed >&2; exit 1; }
+        for key in "${!env[@]}"; do
+          echo "$key=${env[$key]}"
+        done
+        sha=$(git rev-parse "${env[target-branch]}:${env[file]}")
+        echo "sha=$sha"
+        echo ::endgroup::
+
+        echo ::group::Put a request to GitHub
+        gh api \
+            /repos/{owner}/{repo}/contents/"${env[file]}" \
+            --field branch="${env[target-branch]}" \
+            --field content=@<(base64 -i "${env[file]}") \
+            --field message="${env[message]}" \
+            --field sha=$sha \
+            --method PUT \
+          | jq .
+        echo ::endgroup::
+      shell: bash
+  using: composite

@@ -1,0 +1,50 @@
+author: kei-g
+branding:
+  color: blue
+  icon: tag
+description: >
+  Create a release according the tag in your repository
+inputs:
+  body:
+    description: >
+      The text which describes the release.
+    required: false
+  draft:
+    default: 'false'
+    description: >
+      `true` to create draft (unpublished) release.
+      `false` to create a published one.
+    required: false
+  github-token:
+    default: ${{ github.token }}
+    description: >
+      The token which will be used to create a release, typically the $GITHUB_TOKEN.
+    required: false
+  prerelease:
+    default: 'false'
+    description: >
+      `true` to identify the release as a prerelease.
+      `false` to identify the release as a full release.
+    required: false
+  ref:
+    default: ${{ github.ref }}
+    description: >
+      The reference of a git commitish to be associated with the release.
+    required: false
+  release_name:
+    description: >
+      The name of the release. For example, 'Release v1.0.1'
+    required: false
+  remote_name:
+    default: origin
+    description: >
+      The remote name.
+    required: false
+  tag_name:
+    description: >
+      The name of the tag for this release.
+    required: false
+name: 'Create a Release'
+runs:
+  main: ../dist/create-release.js
+  using: node16

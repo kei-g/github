@@ -1,0 +1,21 @@
+jobs:
+  checkout:
+    name: Checkout
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository with digest
+        uses: kei-g/github/checkout@main
+  import-gpg:
+    name: Import GPG
+    runs-on: ubuntu-latest
+    steps:
+      - name: Import a GPG key
+        uses: kei-g/github/import-gpg@main
+        with:
+          fingerprint: ${{ vars.GPG_FINGERPRINT }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          public-key: ${{ vars.GPG_PUBLIC_KEY }}
+          secret-key: ${{ secrets.GPG_PRIVATE_KEY }}
+name: Test
+on:
+  workflow_dispatch:
