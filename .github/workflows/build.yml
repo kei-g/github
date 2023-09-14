@@ -1,0 +1,48 @@
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      - name: Setup the latest Node.js
+        uses: actions/setup-node@v3
+        with:
+          cache: npm
+          node-version: latest
+      - name: Upgrade npm
+        run: |
+          npm install npm@latest -g
+      - name: Install packages
+        run: |
+          npm ci
+      - name: Build
+        run: |
+          npm run build
+      - name: Commit and push if necessary
+        run: |
+          git add -N .
+          while read -d $'\0' -r name; do
+            escaped=${name//%/%25}
+            escaped=${escaped//$'\r'/%0D}
+            escaped=${escaped//$'\n'/%0A}
+            echo "::group::Put $escaped"
+            gh api \
+              --field branch=main \
+              --field content=@<(base64 -i "$name") \
+              --field message=":package: Build $name" \
+              --field sha=$(git rev-parse "main:$name") \
+              --method PUT \
+              /repos/{owner}/{repo}/contents/"$name"
+            echo ::endgroup ::
+          done < <(git diff --name-only -z)
+        shell: bash
+name: Build
+on:
+  push:
+    branches:
+      - main
+    tags-ignore:
+      - '**'
