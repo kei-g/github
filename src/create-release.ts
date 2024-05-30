@@ -3,7 +3,7 @@ import { endGroup, getBooleanInput, getInput, info, setFailed, setOutput, startG
 import { env, stderr } from 'node:process'
 import { spawn } from 'node:child_process'
 
-const createPayloadAsync = async (ref: string): Promise<string> => {
+const createForRelease = async (ref: string): Promise<GitHub.Release> => {
   const [body, sha] = await Promise.all(
     [
       getBodyAsync(ref),
@@ -11,24 +11,24 @@ const createPayloadAsync = async (ref: string): Promise<string> => {
     ]
   )
   const version = ref.slice(11)
-  const payload = {
+  const release = {
     body: getInput('body'),
     draft: getBooleanInput('draft'),
     name: getInput('release_name'),
     prerelease: getBooleanInput('prerelease'),
     tag_name: getInput('tag_name'),
     target_commitish: sha,
-  }
-  if (payload.body.length === 0)
-    payload.body = body
-  if (payload.name.length === 0)
-    payload.name = `Version ${version}`
-  if (payload.tag_name.length === 0)
-    payload.tag_name = `v${version}`
-  return JSON.stringify(payload, undefined, 2)
+  } as GitHub.Release
+  if (release.body.length === 0)
+    release.body = body
+  if (release.name.length === 0)
+    release.name = `Version ${version}`
+  if (release.tag_name.length === 0)
+    release.tag_name = `v${version}`
+  return release
 }
 
-const createReleaseAsync = async () => {
+const createRelease = async () => {
   const token = getInput('github-token', { required: true })
   if (token.length === 0)
     await Promise.reject(`\$github-token must not be blank.`)
@@ -64,33 +64,18 @@ const createReleaseAsync = async () => {
   )
   endGroup()
 
-  const payload = await createPayloadAsync(ref)
-  const buffer = await GitHub.request(
-    {
-      headers: {
-        'Accept': 'application/vnd.github+json',
-        'Authorization': `Bearer ${token}`,
-        'Content-type': 'application/json',
-        'User-agent': 'node:https.request',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-      host: 'api.github.com',
-      method: 'POST',
-      path: `/repos/${repo}/releases`
-    },
-    Buffer.from(payload)
-  )
-
-  startGroup('Outputs')
-  const response = buffer.toString()
-  info(response)
-  setOutput('response', response)
-  endGroup()
-
+  const release = await createForRelease(ref)
   try {
-    const data = JSON.parse(response)
+    const response = await GitHub.createRelease(release, repo, token)
+
+    startGroup('Outputs')
+    const json = JSON.stringify(response)
+    info(json)
+    setOutput('response', json)
+    endGroup()
+
     startGroup('Pretty Outputs')
-    info(JSON.stringify(data, undefined, 2))
+    info(JSON.stringify(response, undefined, 2))
     endGroup()
   }
   catch (reason: unknown) {
@@ -130,6 +115,6 @@ const getCommitishAsync = (ref: string) => executeGitCommandAsync(
   ref
 )
 
-createReleaseAsync().catch(
+createRelease().catch(
   (reason: unknown) => setFailed(`${reason}`)
 )
