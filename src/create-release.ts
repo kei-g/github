@@ -1,26 +1,20 @@
-import { GitHub } from './lib/index.js'
-import { endGroup, getBooleanInput, getInput, info, setFailed, setOutput, startGroup } from '@actions/core'
-import { env, stderr } from 'node:process'
-import { spawn } from 'node:child_process'
+import { Git, GitHub } from './lib/index.js'
+import { endGroup, getBooleanInput, getInput, info, setFailed, setOutput, startGroup, warning } from '@actions/core'
+import { env } from 'node:process'
 
 const createForRelease = async (ref: string): Promise<GitHub.Release> => {
-  const [body, sha] = await Promise.all(
-    [
-      getBodyAsync(ref),
-      getCommitishAsync(ref),
-    ]
-  )
-  const version = ref.slice(11)
+  const refName = env.GITHUB_REF_NAME as string
+  const [version] = refName.match(/\d+(\.\d+)*/) ?? [refName]
   const release = {
     body: getInput('body'),
     draft: getBooleanInput('draft'),
     name: getInput('release_name'),
     prerelease: getBooleanInput('prerelease'),
     tag_name: getInput('tag_name'),
-    target_commitish: sha,
+    target_commitish: env.GITHUB_SHA,
   } as GitHub.Release
   if (release.body.length === 0)
-    release.body = body
+    release.body = await new Git().messageBodyOf(ref as string)
   if (release.name.length === 0)
     release.name = `Version ${version}`
   if (release.tag_name.length === 0)
@@ -42,27 +36,26 @@ const createRelease = async () => {
   const repo = env.GITHUB_REPOSITORY as string
   const url = `https://github.com/${repo}`
 
-  startGroup(`Fetch ${ref} from ${url} as ${remote}`)
-  await executeGitCommandAsync(
-    'init'
-  )
-  await executeGitCommandAsync(
-    'remote',
-    'add',
-    remote,
-    url
-  )
-  await executeGitCommandAsync(
-    'fetch',
-    '--depth=1',
-    '--no-auto-gc',
-    '--progress',
-    '--prune',
-    '--verbose',
-    remote,
-    `+${ref}:${ref}`
-  )
-  endGroup()
+  const git = new Git()
+  git.on('error', (chunk: Buffer) => warning(chunk.toString()))
+
+  {
+    startGroup('git init')
+    info(await git.init())
+    endGroup()
+  }
+
+  {
+    startGroup(`git remote add ${url} as ${remote}`)
+    info(await git.addRemote(remote, url))
+    endGroup()
+  }
+
+  {
+    startGroup(`Fetch ${ref} from ${url} as ${remote}`)
+    info(await git.fetch(ref, remote, { depth: 1, noAutoGc: true, progress: true, prune: true, verbose: true }))
+    endGroup()
+  }
 
   const release = await createForRelease(ref)
   try {
@@ -82,38 +75,6 @@ const createRelease = async () => {
     await Promise.reject(reason)
   }
 }
-
-const executeGitCommandAsync = (...options: string[]) => new Promise<string>(
-  (resolve: (value: string) => void) => {
-    const git = spawn('git', options)
-    git.stderr.pipe(stderr)
-    git.stdout.on(
-      'close',
-      () => resolve(Buffer.concat(chunks).toString())
-    )
-    const chunks = new Array<Buffer>()
-    git.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
-  }
-)
-
-const getBodyAsync = async (ref: string) => {
-  const contents = await executeGitCommandAsync(
-    'for-each-ref',
-    '--format=%(contents)',
-    ref
-  )
-  const i = contents.search(/(?<=\n\s*)Signed\-off\-by\:\s+/g)
-  const j = contents.search(/(?<=\n\s*)\-{5}BEGIN\ PGP\ SIGNATURE\-{5}\n{2}/g)
-  return i < 0 ? j < 0 ? contents : contents.slice(0, j) : contents.slice(0, i)
-}
-
-const getCommitishAsync = (ref: string) => executeGitCommandAsync(
-  '--no-pager',
-  'log',
-  '--pretty=format:%H',
-  '-1',
-  ref
-)
 
 createRelease().catch(
   (reason: unknown) => setFailed(`${reason}`)
