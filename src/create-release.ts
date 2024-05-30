@@ -1,6 +1,6 @@
+import { GitHub } from './lib/index.js'
 import { endGroup, getBooleanInput, getInput, info, setFailed, setOutput, startGroup } from '@actions/core'
 import { env, stderr } from 'node:process'
-import { requestAsync } from './http.js'
 import { spawn } from 'node:child_process'
 
 const createPayloadAsync = async (ref: string): Promise<string> => {
@@ -65,7 +65,7 @@ const createReleaseAsync = async () => {
   endGroup()
 
   const payload = await createPayloadAsync(ref)
-  const buffer = await requestAsync(
+  const buffer = await GitHub.request(
     {
       headers: {
         'Accept': 'application/vnd.github+json',
