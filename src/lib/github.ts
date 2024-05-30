@@ -2,10 +2,6 @@ import { ClientRequest, IncomingMessage, OutgoingHttpHeaders } from 'node:http'
 import { request as nodeRequest } from 'node:https'
 
 export namespace GitHub {
-  export type CreateReleaseResult = {
-    upload_url: string
-  }
-
   export type Release = {
     body: string
     draft: boolean
@@ -23,29 +19,32 @@ export namespace GitHub {
 
   type PostRequest = {
     contentType: string
+    data: Buffer
     method: 'POST'
-    payload: Buffer
   } & Request
 
-  export const createRelease = async (release: Release, repo: string, token: string) => await post(
-    {
-      contentType: 'application/json',
-      payload: Buffer.from(JSON.stringify(release)),
-      token,
-      url: `https://api.github.com/repos/${repo}/releases`,
-    }
-  ) as CreateReleaseResult
+  export const createRelease = async (release: Release, repo: string, token: string) => {
+    const result = await post(
+      {
+        contentType: 'application/json',
+        data: Buffer.from(JSON.stringify(release)),
+        token,
+        url: `https://api.github.com/repos/${repo}/releases`,
+      }
+    ) as Record<string, unknown> & { upload_url: string }
+    return new GitHubRelease(result, token)
+  }
 
   const injectContentHeaders = <R extends Request>(headers: OutgoingHttpHeaders, request: R) => {
     if (isPostRequest(request)) {
-      headers['Content-length'] ??= request.payload.byteLength
+      headers['Content-length'] ??= request.data.byteLength
       headers['Content-type'] ??= request.contentType
     }
   }
 
   const injectPayload = <R extends Request>(client: ClientRequest, request: R) => {
     if (isPostRequest(request))
-      client.write(request.payload, client.end.bind(client))
+      client.write(request.data, client.end.bind(client))
   }
 
   const isPostRequest = (value: unknown): value is PostRequest => {
@@ -88,4 +87,31 @@ export namespace GitHub {
       injectPayload(client, request)
     }
   )
+}
+
+class GitHubRelease {
+  readonly #records: Record<string, unknown>
+  readonly #token: string
+  readonly #uploadURL: string
+
+  constructor(records: Record<string, unknown> & { upload_url: string }, token: string) {
+    this.#records = records
+    this.#token = token
+    this.#uploadURL = records.upload_url
+  }
+
+  attach(data: Buffer, name: string, contentType: string) {
+    return GitHub.post(
+      {
+        contentType,
+        data,
+        token: this.#token,
+        url: this.#uploadURL.replace(/\{\?name[^}]*\}/, `?name=${name}`),
+      }
+    )
+  }
+
+  toJSON(replacer?: undefined, space?: number) {
+    return JSON.stringify(this.#records, replacer, space)
+  }
 }

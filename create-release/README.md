@@ -15,6 +15,16 @@ This action must be use from events whose `github.ref` matches below regular exp
 ```yaml
 - uses: kei-g/github/create-release@main
   with:
+    # File list formatted as below,
+    # `FilePath` as `MIME-Type`
+    #
+    # Any spaces are available for `FilePath`
+    # `MIME-Type` can be omitted, then 'application/octet-stream' will be used instead.
+    assets: |
+      example.txt as text/plain
+      friends.json as application/json
+      group as unknown/type as application/octet-stream
+
     # The text which describes the release.
     #
     # Default: The message body of the current tag

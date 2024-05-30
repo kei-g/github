@@ -1,6 +1,8 @@
 import { Git, GitHub } from './lib/index.js'
-import { endGroup, getBooleanInput, getInput, info, setFailed, setOutput, startGroup, warning } from '@actions/core'
+import { endGroup, getBooleanInput, getInput, getMultilineInput, info, setFailed, setOutput, startGroup, warning } from '@actions/core'
 import { env } from 'node:process'
+import { readFile } from 'node:fs/promises'
+import { sep } from 'node:path'
 
 const createForRelease = async (ref: string): Promise<GitHub.Release> => {
   const refName = env.GITHUB_REF_NAME as string
@@ -59,19 +61,39 @@ const createRelease = async () => {
     endGroup()
   }
 
-  const release = await createForRelease(ref)
   try {
-    const response = await GitHub.createRelease(release, repo, token)
+    const release = await GitHub.createRelease(await createForRelease(ref), repo, token)
 
     startGroup('Outputs')
-    const json = JSON.stringify(response)
+    const json = release.toJSON()
     info(json)
     setOutput('response', json)
     endGroup()
 
     startGroup('Pretty Outputs')
-    info(JSON.stringify(response, undefined, 2))
+    info(release.toJSON(undefined, 2))
     endGroup()
+
+    const assets = getMultilineInput('assets')
+    if (assets.length) {
+      const name = env.GITHUB_REF_NAME as string
+      const sha = env.GITHUB_SHA as string
+      startGroup(`Checkout ${sha} as a branch, ${name}`)
+      info(await git.checkout(name, sha))
+      endGroup()
+    }
+
+    for (const asset of assets) {
+      const matched = asset.match(/\s+as\s+(?<contentType>[+/.a-z-]+)$/)
+      const path = asset.substring(0, matched?.index)
+      const contentType = matched?.groups?.contentType ?? 'application/octet-stream'
+      startGroup(`Attaching asset ${path} as ${contentType}`)
+      const name = path.split(sep).at(-1) as string
+      const data = await readFile(path)
+      const result = await release.attach(data, name, contentType)
+      info(JSON.stringify(result, undefined, 2))
+      endGroup()
+    }
   }
   catch (reason: unknown) {
     await Promise.reject(reason)

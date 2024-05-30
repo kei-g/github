@@ -11,6 +11,10 @@ export class Git {
     return this.execute('remote', 'add', name, url)
   }
 
+  checkout(branchName: string, sha: string) {
+    return this.execute('checkout', '-b', branchName, sha)
+  }
+
   async execute(command: string, ...args: string[]) {
     const git = spawn('git', [command].concat(...args))
     const [_stderr, stdout] = await Promise.all(

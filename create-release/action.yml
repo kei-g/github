@@ -5,6 +5,10 @@ branding:
 description: >
   Create a release according the tag in your repository
 inputs:
+  assets:
+    description: >
+      Relative paths to asset files.
+    required: false
   body:
     description: >
       The text which describes the release.
