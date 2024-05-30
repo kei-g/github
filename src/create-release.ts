@@ -34,7 +34,9 @@ const createRelease = async () => {
 
   const remote = getInput('remote_name', { required: true })
   const repo = env.GITHUB_REPOSITORY as string
-  const url = `https://github.com/${repo}`
+  const user = env.GITHUB_TRIGGERING_ACTOR as string
+  const url = `https://${user}:${token}@github.com/${repo}`
+  const visibleURL = url.replace(/^([^:]+:\/\/)[^:]+[^@]+@(.+)$/, '$1$2')
 
   const git = new Git()
   git.on('error', (chunk: Buffer) => warning(chunk.toString()))
@@ -46,13 +48,13 @@ const createRelease = async () => {
   }
 
   {
-    startGroup(`git remote add ${url} as ${remote}`)
+    startGroup(`git remote add ${visibleURL} as ${remote}`)
     info(await git.addRemote(remote, url))
     endGroup()
   }
 
   {
-    startGroup(`Fetch ${ref} from ${url} as ${remote}`)
+    startGroup(`Fetch ${ref} from ${visibleURL} as ${remote}`)
     info(await git.fetch(ref, remote, { depth: 1, noAutoGc: true, progress: true, prune: true, verbose: true }))
     endGroup()
   }
