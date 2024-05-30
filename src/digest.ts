@@ -1,7 +1,8 @@
 import { BinaryToTextEncoding, createHash } from 'node:crypto'
-import { Stats, lstatSync, readFileSync, readlinkSync } from 'node:fs'
+import { StatsBase } from 'node:fs'
 import { create } from '@actions/glob'
 import { endGroup, getInput, group, info, setOutput, startGroup, setFailed } from '@actions/core'
+import { lstat, readFile, readlink } from 'node:fs/promises'
 import { sep } from 'node:path'
 
 type Entry = {
@@ -11,35 +12,35 @@ type Entry = {
   linkTo?: string
   name: string
   path: string
-  stat: Stats
+  stat: StatsBase<bigint>
 }
 
 const ascendingByPath = (lhs: Entry, rhs: Entry) => lhs.path.localeCompare(rhs.path)
 
-const convertToBuffer = (file: Entry) => file.isSymbolicLink
+const convertToBuffer = async (file: Entry) => file.isSymbolicLink
   ? Buffer.from(`120000 ${file.path}\n${file.linkTo}\n`)
   : Buffer.concat(
     [
       Buffer.from(`10${file.stat.mode.toString(8)} ${file.path}\n`),
-      readFileSync(file.path)
+      await readFile(file.path)
     ]
   )
 
-const convertToEntry = (path: string) => {
+const convertToEntry = async (path: string) => {
   const breadcrumb = path.split(sep)
   const name = breadcrumb.pop()
-  const stat = lstatSync(path)
+  const s = await lstat(path, { bigint: true })
   const entry = {
     breadcrumb,
     name,
     path,
-    stat,
+    stat: s,
   } as Entry
-  if (stat.isDirectory())
+  if (s.isDirectory())
     entry.isDirectory = true
-  if (stat.isSymbolicLink()) {
+  if (s.isSymbolicLink()) {
     entry.isSymbolicLink = true
-    entry.linkTo = readlinkSync(path)
+    entry.linkTo = await readlink(path)
   }
   return entry
 }
@@ -97,7 +98,7 @@ const main = async () => {
   paths.push(...directories)
   endGroup()
 
-  const flatEntries = paths.map(convertToEntry)
+  const flatEntries = await Promise.all(paths.map(convertToEntry))
   if (flatEntries.length === 0)
     await Promise.reject('There is no entry to be processed')
 
@@ -122,7 +123,7 @@ const main = async () => {
   )
 
   const hash = createHash(getInput('algorithm'))
-  hash.update(Buffer.concat(entries.files.map(convertToBuffer)))
+  hash.update(Buffer.concat(await Promise.all(entries.files.map(convertToBuffer))))
   const digest = hash.digest(getInput('encoding') as BinaryToTextEncoding)
 
   startGroup('Outputs')
