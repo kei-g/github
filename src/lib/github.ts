@@ -44,11 +44,8 @@ export namespace GitHub {
   }
 
   const injectPayload = <R extends Request>(client: ClientRequest, request: R) => {
-    if (isPostRequest(request)) {
-      // TODO: Fix to let client.end() is called at a callback taken by client.write()
-      client.write(request.payload)
-      client.end()
-    }
+    if (isPostRequest(request))
+      client.write(request.payload, client.end.bind(client))
   }
 
   const isPostRequest = (value: unknown): value is PostRequest => {
