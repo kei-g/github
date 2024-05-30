@@ -50,5 +50,5 @@ inputs:
     required: false
 name: 'Create a Release'
 runs:
-  main: ../dist/create-release.js
+  main: ../dist/create-release.mjs
   using: node20

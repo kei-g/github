@@ -1,11 +1,10 @@
 {
   "compilerOptions": {
     "alwaysStrict": true,
-    "declaration": true,
-    "declarationDir": ".",
+    "declaration": false,
     "downlevelIteration": true,
     "emitBOM": false,
-    "emitDeclarationOnly": true,
+    "emitDeclarationOnly": false,
     "lib": [
       "ES2022",
     ],
@@ -16,6 +15,9 @@
     "removeComments": false,
     "strict": true,
     "target": "ES2022",
+    "typeRoots": [
+      "node_modules/@types",
+    ],
   },
   "exclude": [],
   "include": [
