@@ -33,4 +33,4 @@ inputs:
     required: false
 runs:
   main: ../../dist/digest.js
-  using: node16
+  using: node20

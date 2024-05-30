@@ -1,6 +1,6 @@
 import { env, stderr } from 'node:process'
 import { endGroup, getBooleanInput, getInput, info, setFailed, setOutput, startGroup } from '@actions/core'
-import { requestAsync } from './http'
+import { requestAsync } from './http.js'
 import { spawn } from 'node:child_process'
 
 const createPayloadAsync = async (ref: string): Promise<string> => {

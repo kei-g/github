@@ -14,8 +14,8 @@
   "scripts": {
     "build": "run-p build:*",
     "build:bundle": "run-p build:bundle:*",
-    "build:bundle:create-release": "esbuild src/create-release.ts --bundle --minify --outfile=dist/create-release.js --platform=node --target=node16",
-    "build:bundle:digest": "esbuild src/digest.ts --bundle --minify --outfile=dist/digest.js --platform=node --target=node16",
+    "build:bundle:create-release": "esbuild src/create-release.ts --bundle --minify --outfile=dist/create-release.js --platform=node --target=es2022",
+    "build:bundle:digest": "esbuild src/digest.ts --bundle --minify --outfile=dist/digest.js --platform=node --target=es2022",
     "clean": "rimraf dist/",
     "prebuild": "run-s clean"
   }

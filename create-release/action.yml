@@ -47,4 +47,4 @@ inputs:
 name: 'Create a Release'
 runs:
   main: ../dist/create-release.js
-  using: node16
+  using: node20
