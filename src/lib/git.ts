@@ -1,7 +1,14 @@
+import { chdir, cwd } from 'node:process'
+import { join as joinPath } from 'node:path'
+import { mkdtemp } from 'node:fs/promises'
+import { saveState } from '@actions/core'
 import { spawn } from 'node:child_process'
+import { tmpdir } from 'node:os'
 
-export class Git {
+export class Git implements Disposable {
+  readonly #history = [] as string[]
   readonly #listeners = new Set<Listener>()
+  readonly #repositories = new Map<string, string>()
 
   #notify(chunk: Buffer) {
     this.#listeners.forEach(listener => listener(chunk))
@@ -13,6 +20,14 @@ export class Git {
 
   checkout(branchName: string, sha: string) {
     return this.execute('checkout', '-b', branchName, sha)
+  }
+
+  async enterToRepository(name: string, prefix: string) {
+    this.#history.push(cwd())
+    const path = await mkdtemp(joinPath(tmpdir(), prefix))
+    this.#repositories.set(name, path)
+    chdir(path)
+    return path
   }
 
   async execute(command: string, ...args: string[]) {
@@ -53,6 +68,14 @@ export class Git {
     return this.execute('init')
   }
 
+  leaveRepository() {
+    const repository = cwd()
+    const home = this.#history.pop()
+    if (home)
+      chdir(home)
+    return repository
+  }
+
   async messageBodyOf(ref: string) {
     const contents = await this.execute(
       'for-each-ref',
@@ -66,6 +89,22 @@ export class Git {
 
   on(_eventName: 'error', listener: Listener) {
     this.#listeners.add(listener)
+  }
+
+  get repositories() {
+    return Array.from(this.#repositories.entries())
+  }
+
+  [Symbol.dispose]() {
+    const repositories = Array.from(this.#repositories.entries()).reduce(
+      (ctx, entry) => {
+        const [key, value] = entry
+        ctx[key] = value
+        return ctx
+      },
+      {} as Record<string, string>
+    )
+    saveState('repositories', JSON.stringify(repositories))
   }
 }
 

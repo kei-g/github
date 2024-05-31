@@ -30,6 +30,10 @@ This action must be use from events whose `github.ref` matches below regular exp
     # Default: The message body of the current tag
     body: ''
 
+    # `true` to checkout the target tag before attaching asset files to the created release.
+    # `false` not to checkout.
+    checkout: false
+
     # `true` to create a draft (unpublished) release.
     # `false` to create a published one.
     #

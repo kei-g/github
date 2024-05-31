@@ -13,6 +13,12 @@ inputs:
     description: >
       The text which describes the release.
     required: false
+  checkout:
+    default: 'true'
+    description: >
+      `true` to checkout the target tag.
+      `false` not to checkout the target tag.
+    required: false
   draft:
     default: 'false'
     description: >
