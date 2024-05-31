@@ -1,4 +1,4 @@
-import { Git, GitHub } from './lib/index.js'
+import { Git, GitHub, LineHandler } from './lib/index.js'
 import { chdir, env } from 'node:process'
 import { endGroup, getBooleanInput, getInput, getMultilineInput, info, setFailed, setOutput, startGroup, warning } from '@actions/core'
 import { join as joinPath, sep } from 'node:path'
@@ -50,23 +50,28 @@ const createRelease = async () => {
   endGroup()
 
   const git = new Git()
-  git.on('error', (chunk: Buffer) => warning(chunk.toString()))
+  await using lineHandler = new LineHandler()
+  lineHandler.addCallback(warning)
+  git.on('error', lineHandler.feed.bind(lineHandler))
 
   {
     startGroup('git init')
     info(await git.init())
+    await lineHandler.flush()
     endGroup()
   }
 
   {
     startGroup(`git remote add ${visibleURL} as ${remote}`)
     info(await git.addRemote(remote, url))
+    await lineHandler.flush()
     endGroup()
   }
 
   {
     startGroup(`Fetch ${ref} from ${visibleURL} as ${remote}`)
     info(await git.fetch(ref, remote, { depth: 1, noAutoGc: true, progress: true, prune: true, verbose: true }))
+    await lineHandler.flush()
     endGroup()
   }
 
@@ -89,6 +94,7 @@ const createRelease = async () => {
       const sha = env.GITHUB_SHA as string
       startGroup(`Checkout ${sha} as a branch, ${name}`)
       info(await git.checkout(name, sha))
+      await lineHandler.flush()
       endGroup()
     }
 
