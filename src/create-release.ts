@@ -1,6 +1,6 @@
 import { Git, GitHub, LineHandler } from './lib/index.js'
 import { chdir, env } from 'node:process'
-import { endGroup, getBooleanInput, getInput, getMultilineInput, info, setFailed, setOutput, startGroup, warning } from '@actions/core'
+import { endGroup, getBooleanInput, getInput, getMultilineInput, info, setFailed, setOutput, startGroup } from '@actions/core'
 import { join as joinPath, sep } from 'node:path'
 import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -114,6 +114,8 @@ const createRelease = async () => {
     await Promise.reject(reason)
   }
 }
+
+const warning = (text: string) => info(`\x1b[33m${text}\x1b[m`)
 
 createRelease().catch(
   (reason: unknown) => setFailed(`${reason}`)
