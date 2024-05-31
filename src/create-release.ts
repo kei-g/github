@@ -5,7 +5,7 @@ import { join as joinPath, sep } from 'node:path'
 import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 
-const attachAssets = async (git: Git, lineHandler: LineHandler, release: GitHub.ReleaseInterface) => {
+const attachAssets = async (git: Git, lineHandler: LineHandler, release: GitHub.Release) => {
   const assets = getMultilineInput('assets')
   if (assets.length) {
     const name = env.GITHUB_REF_NAME as string
@@ -35,7 +35,7 @@ const attachAssets = async (git: Git, lineHandler: LineHandler, release: GitHub.
   }
 }
 
-const createForRelease = async (ref: string): Promise<GitHub.Release> => {
+const createReleaseOptions = async (ref: string): Promise<GitHub.ReleaseOptions> => {
   const refName = env.GITHUB_REF_NAME as string
   const [version] = refName.match(/\d+(\.\d+)*/) ?? [refName]
   const release = {
@@ -45,7 +45,7 @@ const createForRelease = async (ref: string): Promise<GitHub.Release> => {
     prerelease: getBooleanInput('prerelease'),
     tag_name: getInput('tag_name'),
     target_commitish: env.GITHUB_SHA,
-  } as GitHub.Release
+  } as GitHub.ReleaseOptions
   if (release.body.length === 0)
     release.body = await new Git().messageBodyOf(ref as string)
   if (release.name.length === 0)
@@ -108,7 +108,8 @@ const createRelease = async () => {
   )
 
   try {
-    const release = await GitHub.createRelease(await createForRelease(ref), repo, token)
+    const github = new GitHub({ token })
+    const release = await github.createRelease(repo, await createReleaseOptions(ref))
 
     startGroup('Outputs')
     const json = release.toJSON()

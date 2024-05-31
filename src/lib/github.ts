@@ -1,8 +1,65 @@
-import { ClientRequest, IncomingMessage, OutgoingHttpHeaders } from 'node:http'
+import { IncomingMessage } from 'node:http'
 import { request as nodeRequest } from 'node:https'
 
+export class GitHub {
+  readonly #token: string
+
+  #post<T extends Record<string, unknown>>(data: Buffer, url: URL, contentType: string) {
+    return new Promise<T>(
+      resolve => {
+        const client = nodeRequest(
+          {
+            headers: {
+              'accept': 'application/vnd.github+json',
+              'authorization': `Bearer ${this.#token}`,
+              'content-length': data.byteLength,
+              'content-type': contentType,
+              'user-agent': 'node:https.request',
+              'x-github-api-version': '2022-11-28',
+            },
+            hostname: url.hostname,
+            method: 'POST',
+            path: `${url.pathname}${url.search}`,
+            port: url.port,
+            protocol: url.protocol,
+          },
+          (response: IncomingMessage) => {
+            response.on(
+              'close',
+              () => resolve(JSON.parse(Buffer.concat(chunks).toString()))
+            )
+            const chunks = [] as Buffer[]
+            response.on('data', chunks.push.bind(chunks))
+          }
+        )
+        client.write(data, client.end.bind(client))
+      }
+    )
+  }
+
+  constructor(opts: GitHub.ConstructorOptions) {
+    this.#token = opts.token
+  }
+
+  async createRelease(repo: string, opts: GitHub.ReleaseOptions) {
+    const data = Buffer.from(JSON.stringify(opts))
+    const url = new URL(`https://api.github.com/repos/${repo}/releases`)
+    const response = await this.#post<{ upload_url: string }>(data, url, 'application/json')
+    return new GitHubRelease(this.#post.bind(this), response, response.upload_url)
+  }
+}
+
 export namespace GitHub {
-  export type Release = {
+  export type ConstructorOptions = {
+    token: string
+  }
+
+  export interface Release {
+    attach(data: Buffer, name: string, contentType: string): Promise<unknown>
+    toJSON(replacer?: undefined, space?: number): string
+  }
+
+  export type ReleaseOptions = {
     body: string
     draft: boolean
     name: string
@@ -10,110 +67,21 @@ export namespace GitHub {
     tag_name: string
     target_commitish: string
   }
-
-  export interface ReleaseInterface {
-    attach(data: Buffer, name: string, contentType: string): Promise<unknown>
-    toJSON(replacer?: undefined, space?: number): string
-  }
-
-  type Request = {
-    method: 'GET' | 'POST'
-    token: string
-    url: URL | string
-  }
-
-  type PostRequest = {
-    contentType: string
-    data: Buffer
-    method: 'POST'
-  } & Request
-
-  export const createRelease = async (release: Release, repo: string, token: string) => {
-    const result = await post(
-      {
-        contentType: 'application/json',
-        data: Buffer.from(JSON.stringify(release)),
-        token,
-        url: `https://api.github.com/repos/${repo}/releases`,
-      }
-    ) as Record<string, unknown> & { upload_url: string }
-    return new GitHubRelease(result, token)
-  }
-
-  const injectContentHeaders = <R extends Request>(headers: OutgoingHttpHeaders, request: R) => {
-    if (isPostRequest(request)) {
-      headers['Content-length'] ??= request.data.byteLength
-      headers['Content-type'] ??= request.contentType
-    }
-  }
-
-  const injectPayload = <R extends Request>(client: ClientRequest, request: R) => {
-    if (isPostRequest(request))
-      client.write(request.data, client.end.bind(client))
-  }
-
-  const isPostRequest = (value: unknown): value is PostRequest => {
-    const request = value as Request
-    return request.method === 'POST'
-  }
-
-  export const post = async (arg: Omit<PostRequest, 'method'>) => {
-    const obj = structuredClone(arg) as PostRequest
-    obj.method = 'POST'
-    return await request(obj)
-  }
-
-  export const request = <R extends Request>(request: R) => new Promise<unknown>(
-    resolve => {
-      const url = new URL(request.url)
-      const headers = {
-        'Accept': 'application/vnd.github+json',
-        'Authorization': `Bearer ${request.token}`,
-        'User-agent': 'node:https.request',
-        'X-GitHub-Api-Version': '2022-11-28',
-      } as OutgoingHttpHeaders
-      injectContentHeaders(headers, request)
-      const client = nodeRequest(
-        {
-          headers,
-          host: url.host,
-          method: request.method,
-          path: url.href,
-        },
-        (res: IncomingMessage) => {
-          res.on(
-            'close',
-            () => resolve(JSON.parse(Buffer.concat(chunks).toString()))
-          )
-          const chunks = new Array<Buffer>()
-          res.on('data', (chunk: Buffer) => chunks.push(chunk))
-        }
-      )
-      injectPayload(client, request)
-    }
-  )
 }
 
-class GitHubRelease implements GitHub.ReleaseInterface {
+class GitHubRelease implements GitHub.Release {
+  readonly #post: (data: Buffer, url: URL, contentType: string) => Promise<Record<string, unknown>>
   readonly #records: Record<string, unknown>
-  readonly #token: string
   readonly #uploadURL: string
 
-  constructor(records: Record<string, unknown> & { upload_url: string }, token: string) {
+  constructor(post: (data: Buffer, url: URL, contentType: string) => Promise<Record<string, unknown>>, records: Record<string, unknown>, uploadURL: string) {
+    this.#post = post
     this.#records = records
-    this.#token = token
-    this.#uploadURL = records.upload_url
+    this.#uploadURL = uploadURL
   }
 
   attach(data: Buffer, name: string, contentType: string) {
-    return GitHub.post(
-      {
-        contentType,
-        data,
-        token: this.#token,
-        url: this.#uploadURL.replace(/\{\?name[^}]*\}/, `?name=${name}`),
-      }
-    )
+    return this.#post(data, new URL(this.#uploadURL.replace(/\{\?name[^}]*\}/, `?name=${name}`)), contentType)
   }
 
   toJSON(replacer?: undefined, space?: number) {
