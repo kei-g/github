@@ -1,8 +1,9 @@
 import { Git, GitHub } from './lib/index.js'
+import { chdir, env } from 'node:process'
 import { endGroup, getBooleanInput, getInput, getMultilineInput, info, setFailed, setOutput, startGroup, warning } from '@actions/core'
-import { env } from 'node:process'
-import { readFile } from 'node:fs/promises'
-import { sep } from 'node:path'
+import { join as joinPath, sep } from 'node:path'
+import { mkdtemp, readFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 
 const createForRelease = async (ref: string): Promise<GitHub.Release> => {
   const refName = env.GITHUB_REF_NAME as string
@@ -36,9 +37,17 @@ const createRelease = async () => {
 
   const remote = getInput('remote_name', { required: true })
   const repo = env.GITHUB_REPOSITORY as string
+  const sha = env.GITHUB_SHA as string
   const user = env.GITHUB_TRIGGERING_ACTOR as string
   const url = `https://${user}:${token}@github.com/${repo}`
   const visibleURL = url.replace(/^([^:]+:\/\/)[^:]+[^@]+@(.+)$/, '$1$2')
+  const repositoryName = repo.replace(/^[^/]+\//, '')
+
+  startGroup('Making temporary directory')
+  const tempDir = await mkdtemp(joinPath(tmpdir(), `${repositoryName}-${sha}-`))
+  info(`Temporary directory is created at ${tempDir}`)
+  chdir(tempDir)
+  endGroup()
 
   const git = new Git()
   git.on('error', (chunk: Buffer) => warning(chunk.toString()))
