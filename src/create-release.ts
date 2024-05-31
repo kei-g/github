@@ -1,9 +1,39 @@
 import { Git, GitHub, LineHandler } from './lib/index.js'
 import { chdir, env } from 'node:process'
-import { endGroup, getBooleanInput, getInput, getMultilineInput, info, setFailed, setOutput, startGroup } from '@actions/core'
+import { endGroup, getBooleanInput, getInput, getMultilineInput, group, info, setFailed, setOutput, startGroup } from '@actions/core'
 import { join as joinPath, sep } from 'node:path'
 import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+
+const attachAssets = async (git: Git, lineHandler: LineHandler, release: GitHub.ReleaseInterface) => {
+  const assets = getMultilineInput('assets')
+  if (assets.length) {
+    const name = env.GITHUB_REF_NAME as string
+    const sha = env.GITHUB_SHA as string
+    await group(
+      `Checkout ${sha} as a branch, ${name}`,
+      async () => {
+        info(await git.checkout(name, sha))
+        await lineHandler.flush()
+      }
+    )
+  }
+  for (const asset of assets) {
+    const matched = asset.match(/\s+as\s+(?<contentType>[+/.a-z-]+)$/)
+    const path = asset.substring(0, matched?.index)
+    const contentType = matched?.groups?.contentType ?? 'application/octet-stream'
+    await group(
+      `Attaching asset ${path} as ${contentType}`,
+      async () => {
+        const name = path.split(sep).at(-1) as string
+        const data = await readFile(path)
+        const response = await release.attach(data, name, contentType)
+        info(JSON.stringify({ response }, undefined, 2))
+        await lineHandler.flush()
+      }
+    )
+  }
+}
 
 const createForRelease = async (ref: string): Promise<GitHub.Release> => {
   const refName = env.GITHUB_REF_NAME as string
@@ -54,26 +84,28 @@ const createRelease = async () => {
   lineHandler.addCallback(warning)
   git.on('error', lineHandler.feed.bind(lineHandler))
 
-  {
-    startGroup('git init')
-    info(await git.init())
-    await lineHandler.flush()
-    endGroup()
-  }
+  await group(
+    'git init',
+    async () => {
+      info(await git.init())
+      await lineHandler.flush()
+    }
+  )
 
-  {
-    startGroup(`git remote add ${visibleURL} as ${remote}`)
-    info(await git.addRemote(remote, url))
-    await lineHandler.flush()
-    endGroup()
-  }
-
-  {
-    startGroup(`Fetch ${ref} from ${visibleURL} as ${remote}`)
-    info(await git.fetch(ref, remote, { depth: 1, noAutoGc: true, progress: true, prune: true, verbose: true }))
-    await lineHandler.flush()
-    endGroup()
-  }
+  await group(
+    `git remote add ${visibleURL} as ${remote}`,
+    async () => {
+      info(await git.addRemote(remote, url))
+      await lineHandler.flush()
+    }
+  )
+  await group(
+    `Fetch ${ref} from ${visibleURL} as ${remote}`,
+    async () => {
+      info(await git.fetch(ref, remote, { depth: 1, noAutoGc: true, progress: true, prune: true, verbose: true }))
+      await lineHandler.flush()
+    }
+  )
 
   try {
     const release = await GitHub.createRelease(await createForRelease(ref), repo, token)
@@ -88,27 +120,7 @@ const createRelease = async () => {
     info(release.toJSON(undefined, 2))
     endGroup()
 
-    const assets = getMultilineInput('assets')
-    if (assets.length) {
-      const name = env.GITHUB_REF_NAME as string
-      const sha = env.GITHUB_SHA as string
-      startGroup(`Checkout ${sha} as a branch, ${name}`)
-      info(await git.checkout(name, sha))
-      await lineHandler.flush()
-      endGroup()
-    }
-
-    for (const asset of assets) {
-      const matched = asset.match(/\s+as\s+(?<contentType>[+/.a-z-]+)$/)
-      const path = asset.substring(0, matched?.index)
-      const contentType = matched?.groups?.contentType ?? 'application/octet-stream'
-      startGroup(`Attaching asset ${path} as ${contentType}`)
-      const name = path.split(sep).at(-1) as string
-      const data = await readFile(path)
-      const result = await release.attach(data, name, contentType)
-      info(JSON.stringify(result, undefined, 2))
-      endGroup()
-    }
+    await attachAssets(git, lineHandler, release)
   }
   catch (reason: unknown) {
     await Promise.reject(reason)

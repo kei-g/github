@@ -11,6 +11,11 @@ export namespace GitHub {
     target_commitish: string
   }
 
+  export interface ReleaseInterface {
+    attach(data: Buffer, name: string, contentType: string): Promise<unknown>
+    toJSON(replacer?: undefined, space?: number): string
+  }
+
   type Request = {
     method: 'GET' | 'POST'
     token: string
@@ -89,7 +94,7 @@ export namespace GitHub {
   )
 }
 
-class GitHubRelease {
+class GitHubRelease implements GitHub.ReleaseInterface {
   readonly #records: Record<string, unknown>
   readonly #token: string
   readonly #uploadURL: string
