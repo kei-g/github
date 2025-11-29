@@ -5,6 +5,34 @@ jobs:
     steps:
       - name: Checkout the repository with digest
         uses: kei-g/github/checkout@main
+  debian:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: kei-g/github/debian/resolve-distro@main
+        with:
+          codename: ${{ matrix.codename }}
+    strategy:
+      matrix:
+        codename:
+          - bookworm
+          - bullseye
+          - buster
+          - focal
+          - forky
+          - groovy
+          - hirsute
+          - impish
+          - jammy
+          - jessie
+          - kinetic
+          - lunar
+          - mantic
+          - noble
+          - oracular
+          - plucky
+          - questing
+          - stretch
+          - trixie
   import-gpg:
     name: Import GPG
     runs-on: ubuntu-latest

@@ -4,6 +4,8 @@
 
 [`kei-g/github/create-release`][create-release-url] - Create a release on GitHub according to the tag in your repository
 
+[`kei-g/github/debian/resolve-distro`][debian-resolve-distro-url] - Resolve distro name and release version from codename for debian like distributions
+
 [`kei-g/github/import-gpg`][import-gpg-url] - Import a GPG key
 
 [`kei-g/github/put-changes`][put-changes-url] - Put changes with a signature of the [`github-actions[bot]`][github-action-bot-url]
@@ -22,6 +24,7 @@ Contributions are welcome! See [Contributor's Guide](https://github.com/kei-g/gi
 
 [checkout-url]:https://github.com/kei-g/github/tree/main/checkout
 [create-release-url]:https://github.com/kei-g/github/tree/main/create-release
+[debian-resolve-distro-url]:https://github.com/kei-g/github/tree/main/debian/resolve-distro
 [github-action-bot-url]:https://github.com/apps/github-actions
 [import-gpg-url]:https://github.com/kei-g/github/tree/main/import-gpg
 [license-url]:https://github.com/kei-g/github/blob/main/LICENSE

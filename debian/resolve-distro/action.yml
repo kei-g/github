@@ -1,0 +1,55 @@
+author: 'kei-g'
+branding:
+  color: orange
+  icon: anchor
+description: >
+  Resolve distro name and release version from codename for debian like distributions.
+inputs:
+  codename:
+    description: >
+      Release codename like bookworm, noble, and so on.
+    required: true
+  trim-version-suffix:
+    default: 'true'
+    description: >
+      Trim version suffix, or not.
+name: 'Resolve distro name'
+outputs:
+  long-name:
+    description: >
+      Name with version.
+    value: ${{ steps.get.outputs.name }}-${{ steps.get.outputs.version}}
+  name:
+    description: >
+      debian or ubuntu.
+    value: ${{ steps.get.outputs.name }}
+  version:
+    description: >
+      Release version number.
+    value: ${{ steps.get.outputs.version }}
+runs:
+  steps:
+    - id: get
+      name: Get corresponding distro name and release version
+      run: |
+        matched=$(grep -PR ",${{ inputs.codename }}," /usr/share/distro-info)
+        {
+          echo ::group::matched
+          echo $matched
+          echo ::endgroup::
+        } >&2
+        {
+          echo name=$(grep -P '(?<=\/)[^/.]+(?=\.)' -o <<< $matched)
+          case '${{ inputs.trim-version-suffix }}' in
+            true)
+                echo version=$(grep -P '(?<=\.csv:)\d+(\.\d+)*' -o <<< $matched)
+              ;;
+            *)
+                echo version=$(grep -P '(?<=\.csv:)[^,]+' -o <<< $matched)
+              ;;
+          esac
+        } \
+          | tee -a $GITHUB_OUTPUT \
+          >&2
+      shell: bash
+  using: 'composite'
