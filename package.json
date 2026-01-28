@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "@actions/core": "^2.0.3",
-    "@actions/glob": "^0.5.0"
+    "@actions/glob": "^0.5.1"
   },
   "devDependencies": {
     "@types/node": "^25.0.10",
