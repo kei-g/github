@@ -5,6 +5,7 @@
     "downlevelIteration": true,
     "emitBOM": false,
     "emitDeclarationOnly": false,
+    "ignoreDeprecations": "6.0",
     "lib": [
       "ES2022",
     ],
@@ -13,10 +14,11 @@
     "newLine": "lf",
     "pretty": true,
     "removeComments": false,
+    "rootDir": ".",
     "strict": true,
     "target": "ES2022",
-    "typeRoots": [
-      "node_modules/@types",
+    "types": [
+      "node",
     ],
   },
   "exclude": [],
